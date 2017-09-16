@@ -1,6 +1,6 @@
 --- 
 layout:     post
-title:      [Objective-C学以致用]Method Swizzling
+title:      Objective-C学以致用：Method Swizzling
 subtitle:   Method Swizzling解析
 date:       2015-12-02
 author:     奇风
@@ -12,6 +12,7 @@ tags:
     - runtime
     - Method Swizzling
 ---
+
 Method Swizzling还没有一个广泛接受的译名，我个人认为比较容易理解的一个是方法变换。简单的说，它就是在运行期修改类中方法所对应的实现的技术。
 在本文中，我们就将方法变换的来龙去脉捋一遍。
 
