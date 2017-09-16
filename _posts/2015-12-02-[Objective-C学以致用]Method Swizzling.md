@@ -1,6 +1,6 @@
 --- 
 layout:     post
-title:      Objective-C学以致用-Method Swizzling
+title:      [Objective-C学以致用]Method Swizzling
 subtitle:   Method Swizzling解析
 date:       2015-12-02
 author:     奇风
@@ -18,25 +18,25 @@ Method Swizzling还没有一个广泛接受的译名，我个人认为比较容�
 在捋这个来龙去脉的时候，我们需要把握住三个原则：格物致知，深入浅出，学以致用。
 其中，格物致知是方法，深入浅出是成果，学以致用是目的。
 
-#1.格物：明白其原理
+# 1.格物：明白其原理
 方法变换的技术基础在于Objective-C是一个具有运行时动态特性的面向对象语言，要想彻底的明白方法变换的实现细节，那么就需要对Objective-C有一个整体的认识，尤其是其运行期的原理。
 我们这里格的物就是runtime。
 
-##1.1.世界构造
+## 1.1.世界构造
 Objective-C是一个面向对象语言，那么面向对象就是核心的思想，下面这张图对此表述的足够清晰。
 ![Objective-C的世界观](http://blog.devtang.com/images/class-diagram.jpg)
 
 《道德经》中有云：道生一，一生二，二生三，三生万物。
 而Objective-C的世界观与道教的世界观很像。
 
-###Objective-C的“道”
+### Objective-C的“道”
 万物皆对象。这是整个世界的最高准则。
 
-###Objective-C的“一”
+### Objective-C的“一”
 既然万物皆对象，并且考虑到面向对象思想中的抽象与继承概念，那么这个世界中就必然存在第一个对象，也是所有对象的根。
 而这个根就是“一”，NSObject。
 
-###Objective-C的“二”
+### Objective-C的“二”
 我们知道NSObject是一切类的基类，所以它是一个类。但“道”又说了“万物皆对象”，那这个NSObject呢？没错，它也是对象。扩展开来，所有的类其实都是对象。
 不过我们知道，在Objective-C中，对象都是有类型的，它们都是由类定义出来的。那么，NSObject的类型是什么呢？或者说类的类是什么呢？
 NSObject的类型是NSObject的MetaClass（元类）。NSObject是NSObject元类的一个实例。所有的类都存在一个对应的元类。
@@ -47,7 +47,7 @@ NSObject的类型是NSObject的MetaClass（元类）。NSObject是NSObject元类
 但是，不要忘了，整个Objective-C的世界中只有一个根类NSObject，所有其他的类都必须继承自NSObject，所以不可避免的，NSObject元类也是继承自NSObject的一个子类。
 因此才说：一生二。
 
-###Objective-C的“三”
+### Objective-C的“三”
 上面我们说到，NSObject是NSObject元类的实例。那么如果脑洞足够大的话你应该会想到一个问题：那这个NSObject的元类是个什么东东？
 按照最高准则——万物都是对象，那它也是对象。那么它的类型是什么？是NSObject元类的元类？那NSObject元类的元类是谁的实例呢？这不成了一个无限死循环了么？
 
@@ -57,10 +57,10 @@ NSObject的类型是NSObject的MetaClass（元类）。NSObject是NSObject元类
 NSObject类与NSObject元类你依赖我，我继承你，两位一体。在这对阴阳双子的交互作用下，再加上面向对象中基本的继承体系，Objective-C世界总就衍生出无数的类。
 这，便是“三生万物”!
 
-##1.2.运转规则
+## 1.2.运转规则
 在1.1中我们只是讲了整个Objective-C世界的构造是怎么样的，但并没有说明它是怎么运行的，万物对象之间是怎么发生联系的。
 
-###消息机制
+### 消息机制
 Objective-C的运转依靠的是消息机制，其实相对于直接调用，这种方法更接近于现实世界。
 比如说，你中午来到一个小饭馆吃饭，吃完后喊道：“服务员，买单！”
 那么这个时候，“你”就向“服务员”发出了一个名为“买单”的消息，下面是卧槽(OC)语言的代码：
@@ -81,7 +81,7 @@ Objective-C的运转依靠的是消息机制，其实相对于直接调用，这
  2. 服务员只是告诉你他不能买单。这是一个简单的容错处理，当服务员遇到不能处理的[XX]消息时，他就直接告诉你“我不能XX”。这样你就可以选择其他的处理方法。
  3. 服务员直接将你领到柜台处，转由收银员或者老板处理。这就是一个相当好的，接近无缝连接的处理方法了。当服务员接收到自己无法处理的“买单”消息时，她应该判断消息的类型是“买单”，并且转给能处理“买单”消息的对收银员或者老板进行处理。
 
-###代码展现
+### 代码展现
 说了这么多，其实上面只是讲了Objective-C世界运转的基本规则——具有动态特性的消息机制。
 那么这个消息机制在整个世界构造中是怎么运转的呢？
 
@@ -170,16 +170,16 @@ struct objc_class {
 | 穿着女仆装的服务员 | IMP穿着女仆装的服务员 |
 | ... | IMP... |
 
-#2.致知：通晓其实质
+# 2.致知：通晓其实质
 通过上面的格物，我们已经知道了Objective-C的世界构成与运转规则，那么结合以上的内容，我们本文的主角Method Swizzling的实质是什么呢？
 没错，就是变换MethodList中Selector所对应的IMP！
 
 在上一节消息机制的讲述中，找到Selector之后总是需要取对应IMP再调用执行该IMP。那么只要我们修改了MethodList中一个Selector对应的IMP，那么程序运行时，就会调用我们修改后的IMP，运行出我们想要的效果。
 
-##2.1.系统函数
+## 2.1.系统函数
 基于这样的逻辑，OC的objc/runtime.h单元中提供了一些函数来修改类的MethodList。
 
-###交换方法的实现：
+### 交换方法的实现：
 ```
 OBJC_EXPORT void method_exchangeImplementations(Method m1, Method m2) 
      __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
@@ -207,7 +207,7 @@ method_exchangeImplementations(Method吃饭, Method脱衣服);
 [服务员 吃饭];
 ```
 
-###新增方法：
+### 新增方法：
 ```
 /** 
 OBJC_EXPORT BOOL class_addMethod(Class cls, SEL name, IMP imp, 
@@ -216,14 +216,14 @@ OBJC_EXPORT BOOL class_addMethod(Class cls, SEL name, IMP imp,
 ```
 该函数的功能是：给cls添加一个新的方法,若cls的MethodList（不包括父类的MethodList）中存在这个方法则添加失败返回NO。如果cls的父类中存在SEL方法，那么执行此函数后就会在cls的MethodList中添加一个同名的方法覆盖父类的实现。
 
-###设置方法的函数实现：
+### 设置方法的函数实现：
 ```
 OBJC_EXPORT IMP method_setImplementation(Method m, IMP imp) 
      __OSX_AVAILABLE_STARTING(__MAC_10_5, __IPHONE_2_0);
 ```
 该函数的功能是：设置方法的新的实现函数指针，返回值是老的实现函数指针。
 
-###替换方法：
+### 替换方法：
 ```
 OBJC_EXPORT IMP class_replaceMethod(Class cls, SEL name, IMP imp, 
                                     const char *types) 
@@ -231,11 +231,11 @@ OBJC_EXPORT IMP class_replaceMethod(Class cls, SEL name, IMP imp,
 ```
 该函数的功能是：若cls的MethodList（不包括父类的MethodList）中存在这个方法则调用method_setImplementation；否则调用class_addMethod；
 
-#3.致用：理论结合实践
+# 3.致用：理论结合实践
 讲到这里，我们对于MethodSwizzling技术以及其实现原理就有了一个基本完整的了解，算是完成了格物致知这个学习过程。
 不过无论什么技术，学习最终都是为了应用，即学以致用，而Method Swizzling也不例外。所以我们接下来要思考一下为什么要用Method Swizzling，和最终要怎么去使用这项技术。
 
-##why
+## why
 如果要用一句话解释Method Swizzling，那么就是：在运行期修改一个类中的方法实现。
 于是问题来了，如果要修改方法实现的话，继承、类别等技术也可以实现，为什么要用Method Swizzling呢？
  - 避免多次继承；
@@ -252,7 +252,7 @@ OBJC_EXPORT IMP class_replaceMethod(Class cls, SEL name, IMP imp,
  - 其他AOP场景（权限、缓存、性能统计……）；
 其实像友盟统计、调试日志这些场景都属于AOP需要解决的问题范畴，这些问题具有通用性，且与业务逻辑无关。所以，所有AOP编程所要解决的问题，在Objective-C基本上都需要通过方法变换来完成。
 
-##what
+## what
 现在我们需要思考的一个问题是：如果我们需要使用方法变换技术，那么站在使用者的角度上，这个技术是什么样的？
  - 根本目的：替换一个类中的方法实现；
  - 兼容性：替换后是否需要调用原来的实现；
@@ -260,7 +260,7 @@ OBJC_EXPORT IMP class_replaceMethod(Class cls, SEL name, IMP imp,
  - 多样性：需要考虑子类实例方法替换、子类实例方法新增、继承自父类的实例方法替换；子类类方法替换、子类类方法新增、继承自父类的类方法替换；
  - 影响范围：子类替换继承自父类的方法时，是否会影响其他继承自此父类的类功能；同一继承链条上的多个类，同时替换方法实现时，如何保证最终的替换效果；
 
-##how
+## how
 在我们思考怎么根据方法变换技术满足使用者的要求之前，我们必须考虑一下这个技术的缺点。所谓“未虑胜，先虑败”，这样才能立于不败之地。
 具体的问题可见参考资料1。
 不过原文中有一个问题是没有提出的，即：
@@ -326,7 +326,7 @@ hook，钩子，即将自定义代码钩在指定方法身上，和指定方法�
 + (BOOL)swizzleClassMethod:(SEL)aOriginalSelector withReplacement:(SEL)aReplacementSelector andStore:(IMPPointer)aStorePointer;
 ```
 
-#参考资料
+# 参考资料
 1.[Objective-C的hook方案（一）: Method Swizzling](http://blog.csdn.net/yiyaaixuexi/article/details/9374411)
 2.[Objective-C method及相关方法分析](http://blog.csdn.net/uxyheaven/article/details/40350911)
 3.[深入理解Objective-C：Category](http://tech.meituan.com/DiveIntoCategory.html)
